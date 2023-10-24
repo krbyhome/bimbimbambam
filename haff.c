@@ -51,7 +51,7 @@ void set_code(struct node* curr_node, struct haff_code *prev_code) {
 
 int *char_to_byte(char c) {
     int *bites = calloc(8, sizeof(int));
-    for (int i = 0; i < 9; ++i) {
+    for (int i = 0; i < 8; ++i) {
         int bit;
         if (c & (1 << i)) {
             bit = 1;
@@ -157,6 +157,57 @@ int encode(FILE *input, FILE *output) {
     }
 
     free(node_arr);
+    free(pq.values);
 }
 
-int decode(FILE *input, FILE* output);
+int decode(FILE *input, FILE* output) {
+    int node_counter;
+    int symbol_counter;
+
+    fread(&node_counter, sizeof(int), 1, input);
+    fread(&symbol_counter, sizeof(int), 1, input);
+
+    struct priority_queue pq;
+    init(&pq);
+
+    for (int i = 0; i < node_counter; ++i) {
+        struct node *new_node = malloc(sizeof(struct node));
+        fread(new_node, sizeof(struct node), 1, input);
+        push(&pq, new_node->freq, new_node);
+    }
+
+    while (pq.size_of != 1) {
+        struct node *first_min = pop(&pq);
+        struct node *second_min = pop(&pq);
+        struct node *new_node = malloc(sizeof(struct node));
+        new_node->sym = -1;
+        new_node->freq = first_min->freq + second_min->freq;
+        new_node->left = first_min;
+        new_node->right = second_min;
+        push(&pq, new_node->freq, new_node);
+    }
+
+    struct node *root = pop(&pq);
+
+    char buffer;
+    struct node *curr_root = root;
+    while (symbol_counter) {
+        fread(&buffer, sizeof(char), 1, input);
+        int *bytes = char_to_byte(buffer);
+        for (int i = 0; i < 8; ++i) {
+            if (bytes[i]) {
+                curr_root = curr_root->right;
+            } else {
+                curr_root = curr_root->left;
+            }
+            if (curr_root->sym != -1) {
+                fwrite(&curr_root->sym, sizeof(char), 1, output);
+                curr_root = root;
+                symbol_counter--;
+                if (!symbol_counter) {
+                    break;
+                }
+            }
+        }
+    }
+}
